@@ -1,6 +1,7 @@
 interface Props {
   fileName: string;
   onOpenFile: () => void;
+  onCloseFile?: () => void;
   zoomLevel: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -12,6 +13,7 @@ interface Props {
 export default function Toolbar({
   fileName,
   onOpenFile,
+  onCloseFile,
   zoomLevel,
   onZoomIn,
   onZoomOut,
@@ -21,7 +23,14 @@ export default function Toolbar({
 }: Props) {
   return (
     <header className="toolbar">
-      <span className="toolbar-title">{fileName || 'MDViewer'}</span>
+      <div className="toolbar-title-group">
+        <span className="toolbar-title">{fileName || 'MDViewer'}</span>
+        {fileName && onCloseFile && (
+          <button className="toolbar-close-btn" onClick={onCloseFile} title="Close file">
+            ×
+          </button>
+        )}
+      </div>
 
       <div className="toolbar-controls">
         {/* Zoom controls */}

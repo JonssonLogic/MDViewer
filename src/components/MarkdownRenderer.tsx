@@ -8,6 +8,7 @@ import remarkDeflist from 'remark-definition-list';
 import rehypeKatex from 'rehype-katex';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import rehypeRaw from 'rehype-raw';
 import rehypeHighlight from 'rehype-highlight';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { remarkCallouts } from '../utils/remarkCallouts';
@@ -64,6 +65,7 @@ export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir }:
 
   const rehypePlugins = useMemo(
     () => [
+      rehypeRaw,
       rehypeKatex,
       rehypeSlug,
       [rehypeAutolinkHeadings, { behavior: 'wrap' }] as const,

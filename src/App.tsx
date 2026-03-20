@@ -22,7 +22,7 @@ function clampZoom(z: number) {
 }
 
 export default function App() {
-  const { filePath, fileContent, isLoading, error, openFileDialog, refreshFile } =
+  const { filePath, fileContent, isLoading, error, openFileDialog, refreshFile, closeFile } =
     useFileLoader();
 
   const mainRef = useRef<HTMLElement>(null);
@@ -115,6 +115,7 @@ export default function App() {
       <Toolbar
         fileName={fileName}
         onOpenFile={openFileDialog}
+        onCloseFile={closeFile}
         zoomLevel={zoomLevel}
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}

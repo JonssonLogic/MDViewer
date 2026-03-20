@@ -76,6 +76,14 @@ body {
   gap: 1rem;
 }
 
+.toolbar-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow: hidden;
+  min-width: 0;
+}
+
 .toolbar-title {
   font-family: var(--font-heading);
   font-size: 0.875rem;
@@ -84,6 +92,25 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-text);
+}
+
+.toolbar-close-btn {
+  -webkit-app-region: no-drag;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.toolbar-close-btn:hover {
+  color: var(--color-text);
+  background: var(--color-bg);
 }
 
 .toolbar-controls {

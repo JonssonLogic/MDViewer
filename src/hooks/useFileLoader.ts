@@ -57,6 +57,13 @@ export function useFileLoader() {
     }
   }, [openFile]);
 
+  const closeFile = useCallback(async () => {
+    try { await invoke('stop_watching'); } catch { /* no watcher active */ }
+    setFilePath(null);
+    setFileContent('');
+    setError(null);
+  }, []);
+
   const refreshFile = useCallback(async () => {
     const path = filePathRef.current;
     if (!path) return;
@@ -125,5 +132,5 @@ export function useFileLoader() {
     };
   }, [openFile]);
 
-  return { filePath, fileContent, isLoading, error, openFile, openFileDialog, refreshFile };
+  return { filePath, fileContent, isLoading, error, openFile, openFileDialog, refreshFile, closeFile };
 }

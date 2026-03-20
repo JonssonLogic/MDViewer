@@ -282,6 +282,7 @@
 .markdown-body tbody tr:hover { background: var(--color-accent-soft); }
 
 [data-theme="dark"] .markdown-body tbody tr:nth-child(even) { background: #2a2a30; }
+[data-theme="dark"] .markdown-body tbody tr:hover { background: var(--color-accent-soft); }
 
 /* ─── Images ────────────────────────────────────────────────────── */
 .markdown-body img {
@@ -290,6 +291,33 @@
   box-shadow: var(--shadow-card);
   display: block;
   margin: 1.5rem auto;
+}
+
+.markdown-body figure {
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.markdown-body figure img {
+  margin: 0 auto 0.5rem;
+}
+
+.markdown-body figcaption {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+/* ─── Quarto layout divs ───────────────────────────────────────── */
+.markdown-body .columns {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.markdown-body .column {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ─── Footnotes ─────────────────────────────────────────────────── */
