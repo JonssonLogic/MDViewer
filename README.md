@@ -2,6 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+> **AI Disclosure:** This project is largely AI-assisted. The majority of the code, architecture, and documentation has been generated and iterated on using [Claude Code](https://claude.ai/code) (Anthropic). Human involvement has been focused on directing features, reviewing output, and making design decisions.
+
 A desktop application for viewing Markdown (`.md`) and Quarto (`.qmd`) files. Built with Tauri v2, React, and TypeScript.
 
 ## Features
