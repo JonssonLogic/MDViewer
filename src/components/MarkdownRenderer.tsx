@@ -5,6 +5,7 @@ import remarkMath from 'remark-math';
 import remarkDirective from 'remark-directive';
 import remarkGemoji from 'remark-gemoji';
 import remarkDeflist from 'remark-definition-list';
+import remarkSupersub from 'remark-supersub';
 import rehypeKatex from 'rehype-katex';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
@@ -59,6 +60,7 @@ export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir }:
       remarkCallouts,
       remarkGemoji,
       remarkDeflist,
+      remarkSupersub,
     ],
     []
   );

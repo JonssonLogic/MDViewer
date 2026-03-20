@@ -20,6 +20,7 @@
   --content-width: 50rem;
   --toc-width:     240px;
   --toolbar-height: 48px;
+  --tab-height:    34px;
   --radius:        10px;
   --shadow-card:   0 2px 8px rgba(0,0,0,.10), 0 0 0 1px rgba(0,0,0,.04);
 }
@@ -278,3 +279,73 @@ body {
 
 .empty-state-error { color: #c0392b; font-size: 0.95rem; }
 [data-theme="dark"] .empty-state-error { color: #fca5a5; }
+
+/* ─── Tab bar ──────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  height: var(--tab-height);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-app-region: no-drag;
+  scrollbar-width: thin;
+}
+
+.tab-bar::-webkit-scrollbar { height: 2px; }
+.tab-bar::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.tab-item:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.tab-item.tab-active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.tab-close {
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  border-radius: 3px;
+  padding: 0 0.15rem;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.tab-item:hover .tab-close { opacity: 1; }
+.tab-item.tab-active .tab-close { opacity: 0.6; }
+.tab-item.tab-active:hover .tab-close { opacity: 1; }
+
+.tab-close:hover {
+  color: var(--color-text);
+  background: var(--color-border);
+}

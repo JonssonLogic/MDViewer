@@ -1,18 +1,33 @@
 mod commands;
 
 use commands::WatcherState;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            use tauri::{Emitter, Manager};
+            // args[0] = executable, args[1] = file path (if any)
+            if let Some(file) = args.get(1) {
+                let path = std::path::PathBuf::from(&cwd).join(file);
+                if let Ok(abs) = path.canonicalize() {
+                    let _ = app.emit("open-file", abs.to_string_lossy().to_string());
+                }
+            }
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(WatcherState(Mutex::new(None)))
+        .manage(WatcherState(Mutex::new(HashMap::new())))
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::watch_file,
-            commands::stop_watching,
+            commands::stop_watching_file,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
