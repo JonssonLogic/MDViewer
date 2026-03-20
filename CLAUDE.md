@@ -87,9 +87,3 @@ The Rust backend uses the `notify` + `notify-debouncer-mini` crates. One watcher
 - `src-tauri/Cargo.toml` — includes `protocol-asset` feature on `tauri`, `webview2-com` for Windows-specific WebView2 control
 - The frontend dist is built to `dist/` and served from there in production
 
-## Implementation Plan and Task Tracking
-
-The full implementation plan is at:
-`C:\Users\CV\.claude\plans\hazy-knitting-pike.md`
-
-Current progress is tracked in [TODO.md](TODO.md) in this project root. **After completing each step, update TODO.md** by marking the step `[x]` and updating the "Last updated after" line at the bottom. This ensures any Claude instance resuming work can immediately see where to pick up.
