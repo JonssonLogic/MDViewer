@@ -1,0 +1,46 @@
+---
+title: "Quarto Test Document"
+author: "Test Author"
+format: html
+execute:
+  echo: true
+---
+
+# Introduction
+
+This is the introduction of a Quarto document. The YAML front matter above and the code chunks below should be stripped — only this prose should appear.
+
+## Analysis
+
+Here is some analytical content that should render.
+
+```{python}
+import pandas as pd
+import numpy as np
+
+df = pd.DataFrame({'x': range(10), 'y': np.random.randn(10)})
+print(df.head())
+```
+
+The paragraph above the code chunk and this paragraph should both be visible.
+
+## Results
+
+The results show a clear improvement over the baseline.
+
+```{r echo=FALSE}
+model <- lm(y ~ x, data = df)
+summary(model)
+```
+
+## Conclusion
+
+We conclude that the preprocessing works correctly when only this prose section is rendered and no YAML or code chunks appear.
+
+Regular markdown still works:
+
+- Item one
+- Item two
+- Item three
+
+And **bold**, *italic*, and `code` all render fine.

@@ -1,0 +1,253 @@
+/* ─── Design tokens ─────────────────────────────────────────────── */
+:root {
+  --color-bg:              #fafaf8;
+  --color-surface:         #ffffff;
+  --color-text:            #2d2d2d;
+  --color-text-secondary:  #6b6b6b;
+  --color-accent:          #e63946;
+  --color-accent-soft:     #fdecea;
+  --color-link:            #1d72b8;
+  --color-border:          #e0ddd5;
+  --color-code-bg:         #1e1e2e;
+  --color-code-text:       #cdd6f4;
+  --color-blockquote-bar:  #e63946;
+  --color-blockquote-bg:   #fff8f8;
+
+  --font-body:    Georgia, Cambria, 'Times New Roman', serif;
+  --font-heading: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:    'Cascadia Code', Consolas, 'Fira Code', 'Courier New', monospace;
+
+  --content-width: 50rem;
+  --toc-width:     240px;
+  --toolbar-height: 48px;
+  --radius:        10px;
+  --shadow-card:   0 2px 8px rgba(0,0,0,.10), 0 0 0 1px rgba(0,0,0,.04);
+}
+
+/* ─── Dark theme tokens ────────────────────────────────────────── */
+[data-theme="dark"] {
+  --color-bg:              #1a1b1e;
+  --color-surface:         #25262b;
+  --color-text:            #d4d4d8;
+  --color-text-secondary:  #a1a1aa;
+  --color-accent:          #f87171;
+  --color-accent-soft:     #3b2020;
+  --color-link:            #60a5fa;
+  --color-border:          #3f3f46;
+  --color-code-bg:         #0d0d12;
+  --color-code-text:       #cdd6f4;
+  --color-blockquote-bar:  #f87171;
+  --color-blockquote-bg:   #2a1f1f;
+  --shadow-card:           0 2px 8px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.04);
+}
+
+/* ─── Reset ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── App shell ─────────────────────────────────────────────────── */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─── Toolbar ───────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--toolbar-height);
+  padding: 0 1.25rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  user-select: none;
+  gap: 1rem;
+}
+
+.toolbar-title {
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
+.toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+
+.toolbar-open-btn {
+  -webkit-app-region: no-drag;
+  padding: 0.3rem 0.9rem;
+  border-radius: 20px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--color-text);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.toolbar-open-btn:hover { background: var(--color-bg); }
+
+/* ─── Zoom controls ────────────────────────────────────────────── */
+.zoom-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.zoom-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  padding: 0.2rem 0.55rem;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+
+.zoom-btn:hover {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.zoom-label {
+  background: none;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  padding: 0.2rem 0.5rem;
+  min-width: 3.2rem;
+  text-align: center;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.zoom-label:hover { color: var(--color-text); }
+
+/* ─── Theme toggle ─────────────────────────────────────────────── */
+.theme-toggle-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.5rem;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.theme-toggle-btn:hover { background: var(--color-bg); }
+
+/* ─── Layout ────────────────────────────────────────────────────── */
+.content-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.markdown-content {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  scroll-behavior: smooth;
+}
+
+/* ─── Loading / error ───────────────────────────────────────────── */
+.loading-bar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-accent);
+  animation: loading-pulse 1s ease-in-out infinite;
+  z-index: 10;
+}
+
+@keyframes loading-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.content-error, .content-empty {
+  padding: 2rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+.content-error { color: #c0392b; }
+[data-theme="dark"] .content-error { color: #fca5a5; }
+
+/* ─── Empty state ───────────────────────────────────────────────── */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.1rem;
+  color: var(--color-text-secondary);
+}
+
+.empty-state-hint { font-size: 1.1rem; font-family: var(--font-heading); }
+
+.empty-state-btn {
+  padding: 0.6rem 1.75rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--color-accent);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.empty-state-btn:hover { background: #c62a36; }
+[data-theme="dark"] .empty-state-btn:hover { background: #ef4444; }
+
+.empty-state-drag {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+.empty-state-drag code {
+  background: var(--color-bg);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  border: 1px solid var(--color-border);
+}
+
+.empty-state-error { color: #c0392b; font-size: 0.95rem; }
+[data-theme="dark"] .empty-state-error { color: #fca5a5; }
