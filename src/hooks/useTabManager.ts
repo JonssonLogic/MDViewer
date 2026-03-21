@@ -54,7 +54,9 @@ export function useTabManager() {
     }
   }, []);
 
-  const openFile = useCallback(async (path: string) => {
+  const openFile = useCallback(async (rawPath: string) => {
+    // Strip Windows UNC extended prefix (\\?\) which breaks asset protocol URLs
+    const path = rawPath.startsWith('\\\\?\\') ? rawPath.slice(4) : rawPath;
     const normalizedPath = path.toLowerCase().replace(/\//g, '\\');
 
     // Check if already open — switch to it

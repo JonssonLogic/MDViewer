@@ -13,7 +13,10 @@ pub fn run() {
             if let Some(file) = args.get(1) {
                 let path = std::path::PathBuf::from(&cwd).join(file);
                 if let Ok(abs) = path.canonicalize() {
-                    let _ = app.emit("open-file", abs.to_string_lossy().to_string());
+                    // Strip Windows UNC extended prefix (\\?\) which breaks asset URLs
+                    let clean = abs.to_string_lossy().to_string();
+                    let clean = clean.strip_prefix(r"\\?\").unwrap_or(&clean).to_string();
+                    let _ = app.emit("open-file", clean);
                 }
             }
             if let Some(w) = app.get_webview_window("main") {
