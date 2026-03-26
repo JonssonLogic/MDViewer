@@ -6,6 +6,8 @@ interface Props {
   onZoomReset: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  rawView: boolean;
+  onToggleRawView: () => void;
 }
 
 export default function Toolbar({
@@ -16,6 +18,8 @@ export default function Toolbar({
   onZoomReset,
   theme,
   onToggleTheme,
+  rawView,
+  onToggleRawView,
 }: Props) {
   return (
     <header className="toolbar">
@@ -32,6 +36,15 @@ export default function Toolbar({
           </button>
           <button className="zoom-btn" onClick={onZoomIn} title="Zoom in (Ctrl++)">+</button>
         </div>
+
+        {/* Raw view toggle */}
+        <button
+          className={`theme-toggle-btn${rawView ? ' raw-view-active' : ''}`}
+          onClick={onToggleRawView}
+          title="Toggle raw source view (Ctrl+U)"
+        >
+          &lt;/&gt;
+        </button>
 
         {/* Theme toggle */}
         <button className="theme-toggle-btn" onClick={onToggleTheme} title="Toggle dark mode">

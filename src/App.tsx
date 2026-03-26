@@ -7,7 +7,10 @@ import EmptyState from './components/EmptyState';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import TableOfContents from './components/TableOfContents';
 import ErrorBoundary from './components/ErrorBoundary';
-import { preprocessQmd, isQmdFile } from './utils/qmdPreprocess';
+import RawSourceView from './components/RawSourceView';
+import { preprocessQmd, isQmdFile, extractYamlMeta } from './utils/qmdPreprocess';
+import { parseBibtex, type BibEntry } from './utils/bibParser';
+import { invoke } from '@tauri-apps/api/core';
 import './styles/global.css';
 import './styles/toc.css';
 import './styles/markdown.css';
@@ -49,11 +52,31 @@ export default function App() {
   const fileName = filePath ? (filePath.split(/[\\/]/).pop() ?? '') : '';
   const fileDir = filePath ? filePath.replace(/[\\/][^\\/]*$/, '') : '';
 
+  // ── Bibliography loading ────────────────────────────────────────
+  const [bibEntries, setBibEntries] = useState<BibEntry[]>([]);
+
+  useEffect(() => {
+    if (!fileContent || !filePath || !isQmdFile(filePath)) return;
+    const meta = extractYamlMeta(fileContent);
+    if (!meta.bibliography) return;
+    // Resolve bibliography path relative to the file's directory
+    const sep = fileDir.includes('\\') ? '\\' : '/';
+    const bibPath = /^([a-zA-Z]:\\|\/)/.test(meta.bibliography)
+      ? meta.bibliography
+      : `${fileDir}${sep}${meta.bibliography.replace(/[/\\]/g, sep)}`;
+
+    let cancelled = false;
+    invoke<string>('read_file', { path: bibPath })
+      .then(content => { if (!cancelled) setBibEntries(parseBibtex(content)); })
+      .catch(() => { if (!cancelled) setBibEntries([]); });
+    return () => { cancelled = true; };
+  }, [fileContent, filePath, fileDir]);
+
   const processedContent = useMemo(() => {
     if (!fileContent) return '';
-    if (filePath && isQmdFile(filePath)) return preprocessQmd(fileContent);
+    if (filePath && isQmdFile(filePath)) return preprocessQmd(fileContent, bibEntries);
     return fileContent;
-  }, [fileContent, filePath]);
+  }, [fileContent, filePath, bibEntries]);
 
   // ── Zoom (CSS zoom on content only) ────────────────────────────
   const [zoomLevel, setZoomLevel] = useState<number>(() => {
@@ -66,6 +89,15 @@ export default function App() {
   const zoomIn = useCallback(() => setZoomLevel(z => clampZoom(z + ZOOM_STEP)), []);
   const zoomOut = useCallback(() => setZoomLevel(z => clampZoom(z - ZOOM_STEP)), []);
   const zoomReset = useCallback(() => setZoomLevel(1.0), []);
+
+  // ── Raw view ────────────────────────────────────────────────────
+  const [rawView, setRawView] = useState<boolean>(() => {
+    return localStorage.getItem('mdviewer-raw-view') === 'true';
+  });
+
+  useEffect(() => { localStorage.setItem('mdviewer-raw-view', String(rawView)); }, [rawView]);
+
+  const toggleRawView = useCallback(() => setRawView(v => !v), []);
 
   // ── Theme ───────────────────────────────────────────────────────
   const [theme, setTheme] = useState<Theme>(() => {
@@ -107,6 +139,7 @@ export default function App() {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key === 'o') { e.preventDefault(); openFileDialog(); }
       if (mod && e.key === 'r') { e.preventDefault(); refreshActiveTab(); }
+      if (mod && e.key === 'u') { e.preventDefault(); toggleRawView(); }
       if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomIn(); }
       if (mod && e.key === '-') { e.preventDefault(); zoomOut(); }
       if (mod && e.key === '0') { e.preventDefault(); zoomReset(); }
@@ -127,7 +160,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openFileDialog, refreshActiveTab, zoomIn, zoomOut, zoomReset, activeTabId, closeTab, switchTab, tabs]);
+  }, [openFileDialog, refreshActiveTab, zoomIn, zoomOut, zoomReset, toggleRawView, activeTabId, closeTab, switchTab, tabs]);
 
   // Ctrl+scroll zoom
   useEffect(() => {
@@ -150,6 +183,8 @@ export default function App() {
         onZoomReset={zoomReset}
         theme={theme}
         onToggleTheme={toggleTheme}
+        rawView={rawView}
+        onToggleRawView={toggleRawView}
       />
       <TabBar
         tabs={tabs}
@@ -160,16 +195,24 @@ export default function App() {
       <div className="content-layout">
         {activeTab ? (
           <>
-            <TableOfContents markdown={processedContent} contentRef={mainRef} />
+            {!rawView && <TableOfContents markdown={processedContent} contentRef={mainRef} />}
             <main className="markdown-content" ref={mainRef} onScroll={handleScroll}>
               {isLoading && <div className="loading-bar" />}
               {error && <p className="content-error">{error}</p>}
               {!fileContent && !isLoading && (
                 <p className="content-empty">This file is empty.</p>
               )}
-              <ErrorBoundary>
-                <MarkdownRenderer content={processedContent} zoomLevel={zoomLevel} theme={theme} baseDir={fileDir} />
-              </ErrorBoundary>
+              {rawView ? (
+                <div className="raw-source-view" style={{ zoom: zoomLevel }}>
+                  <div className="raw-source-pre">
+                    <RawSourceView content={fileContent} fileName={fileName} />
+                  </div>
+                </div>
+              ) : (
+                <ErrorBoundary>
+                  <MarkdownRenderer content={processedContent} zoomLevel={zoomLevel} theme={theme} baseDir={fileDir} />
+                </ErrorBoundary>
+              )}
             </main>
           </>
         ) : (

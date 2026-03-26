@@ -15,6 +15,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { remarkCallouts } from '../utils/remarkCallouts';
 import CodeBlock from './CodeBlock';
 import MermaidBlock from './MermaidBlock';
+import TabsetBlock from './TabsetBlock';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
 
@@ -41,6 +42,8 @@ function normalizePath(p: string): string {
 
 function resolveImageSrc(src: string, baseDir: string): string {
   if (!src) return src;
+  // Decode URL-encoded characters (e.g., %5C backslash from markdown parsers)
+  try { src = decodeURIComponent(src); } catch { /* ignore malformed URIs */ }
   // Already absolute URL (http, https, data, asset)
   if (/^(https?:|data:|asset:|blob:)/i.test(src)) return src;
   // Absolute file path (e.g. C:\... or /...)
@@ -105,9 +108,26 @@ export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir }:
       },
 
       // Resolve image paths relative to the open file's directory
+      // Wrap in <figure> with visible caption when alt text is present
       img({ src, alt, ...props }: any) {
         const resolved = resolveImageSrc(src ?? '', baseDir);
-        return <img src={resolved} alt={alt ?? ''} {...props} />;
+        if (alt) {
+          return (
+            <figure>
+              <img src={resolved} alt={alt} {...props} />
+              <figcaption>{alt}</figcaption>
+            </figure>
+          );
+        }
+        return <img src={resolved} alt="" {...props} />;
+      },
+
+      // Route panel-tabset divs to TabsetBlock component
+      div({ className, children, ...props }: any) {
+        if (className === 'panel-tabset') {
+          return <TabsetBlock>{children}</TabsetBlock>;
+        }
+        return <div className={className} {...props}>{children}</div>;
       },
     }),
     [theme, baseDir]

@@ -193,10 +193,23 @@ body {
   font-size: 0.9rem;
   padding: 0.2rem 0.5rem;
   line-height: 1;
-  transition: background 0.15s;
+  color: var(--color-text);
+  transition: background 0.15s, color 0.15s;
 }
 
 .theme-toggle-btn:hover { background: var(--color-bg); }
+
+.theme-toggle-btn.raw-view-active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.theme-toggle-btn.raw-view-active:hover {
+  background: #c62a36;
+}
+[data-theme="dark"] .theme-toggle-btn.raw-view-active:hover {
+  background: #ef4444;
+}
 
 /* ─── Layout ────────────────────────────────────────────────────── */
 .content-layout {

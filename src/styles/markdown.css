@@ -320,6 +320,29 @@
   min-width: 0;
 }
 
+/* Quarto layout grid (layout-ncol / layout-nrow) */
+.markdown-body .quarto-layout-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.markdown-body .quarto-layout-grid img {
+  width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+/* Figure numbering via CSS counters */
+.markdown-body { counter-reset: figure-counter; }
+.markdown-body figure { counter-increment: figure-counter; }
+.markdown-body figure figcaption::before {
+  content: 'Figure ' counter(figure-counter) ': ';
+  font-weight: 600;
+  font-style: normal;
+  color: var(--color-text);
+}
+
 /* ─── Footnotes ─────────────────────────────────────────────────── */
 .markdown-body .footnotes {
   margin-top: 3rem;
@@ -443,6 +466,268 @@
   border-color: #7f1d1d;
 }
 [data-theme="dark"] .mermaid-error-msg { color: #fca5a5; }
+
+/* ─── Raw source view ──────────────────────────────────────────── */
+.raw-source-view {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 1.5rem 2rem 5rem;
+}
+
+.raw-source-pre {
+  background: var(--color-code-bg);
+  color: #abb2bf;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 0.75rem 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  tab-size: 4;
+}
+
+/* Reset all markdown table styles inside raw source view */
+.raw-source-table,
+.raw-source-table thead,
+.raw-source-table tbody { all: unset !important; display: table !important; width: 100% !important; }
+.raw-source-table tr { all: unset !important; display: table-row !important; }
+.raw-source-table td { all: unset !important; display: table-cell !important; }
+.raw-source-table { border-collapse: collapse !important; }
+
+.raw-source-table tr:hover {
+  background: rgba(255,255,255,0.03) !important;
+}
+
+td.raw-line-number {
+  width: 3.5rem !important;
+  min-width: 3.5rem !important;
+  padding: 0 1rem 0 1.25rem !important;
+  text-align: right !important;
+  color: #5c6370 !important;
+  user-select: none;
+  vertical-align: top !important;
+  white-space: nowrap !important;
+  border-right: 1px solid rgba(255,255,255,0.08) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 0.875rem !important;
+  line-height: 1.7 !important;
+}
+
+td.raw-line-content {
+  padding: 0 1.25rem !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  color: #abb2bf !important;
+  vertical-align: top !important;
+  font-family: var(--font-mono) !important;
+  font-size: 0.875rem !important;
+  line-height: 1.7 !important;
+}
+
+/* ─── Raw source syntax highlighting (QMD/Markdown) ───────────── */
+.syn-heading       { color: #e06c75; font-weight: 700; }
+.syn-yaml-fence    { color: #c678dd; }
+.syn-yaml-key      { color: #e06c75; }
+.syn-yaml-val      { color: #98c379; }
+.syn-code-fence    { color: #c678dd; }
+.syn-code-lang     { color: #e5c07b; font-weight: 600; }
+.syn-bold          { color: #d19a66; font-weight: 700; }
+.syn-italic        { color: #d19a66; font-style: italic; }
+.syn-link-text     { color: #61afef; }
+.syn-link-url      { color: #56b6c2; }
+.syn-image         { color: #c678dd; }
+.syn-table-pipe    { color: #636d83; }
+.syn-html          { color: #e06c75; }
+.syn-comment       { color: #5c6370; font-style: italic; }
+.syn-callout       { color: #c678dd; font-weight: 600; }
+.syn-inline-code   { color: #98c379; }
+.syn-math          { color: #56b6c2; }
+.syn-shortcode     { color: #e5c07b; }
+.syn-citation      { color: #61afef; font-weight: 500; }
+
+/* ─── Quarto table classes ─────────────────────────────────────── */
+/* Wrapper div for tables with Quarto class annotations */
+.quarto-table-wrapper {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+
+/* .striped — explicit alternating rows (default is already striped, but this ensures it) */
+.quarto-table-wrapper.striped table tbody tr:nth-child(even) { background: #f8f6f2; }
+[data-theme="dark"] .quarto-table-wrapper.striped table tbody tr:nth-child(even) { background: #2a2a30; }
+
+/* .plain — remove default decorative styling */
+.quarto-table-wrapper.plain table {
+  box-shadow: none;
+  border-radius: 0;
+}
+.quarto-table-wrapper.plain table thead {
+  background: transparent;
+  color: var(--color-text);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.quarto-table-wrapper.plain table th {
+  border-bottom: 2px solid var(--color-border);
+}
+.quarto-table-wrapper.plain table tbody tr:nth-child(even) { background: transparent; }
+.quarto-table-wrapper.plain table tbody tr:hover { background: transparent; }
+
+/* .hover — explicit hover effect */
+.quarto-table-wrapper.hover table tbody tr:hover { background: var(--color-accent-soft); }
+
+/* .bordered — visible cell borders */
+.quarto-table-wrapper.bordered table td,
+.quarto-table-wrapper.bordered table th {
+  border: 1px solid var(--color-border);
+}
+
+/* .sm — compact table with smaller padding */
+.quarto-table-wrapper.sm table th { padding: 0.4rem 0.6rem; font-size: 0.75rem; }
+.quarto-table-wrapper.sm table td { padding: 0.35rem 0.6rem; font-size: 0.85rem; }
+
+/* .responsive — horizontal scroll on overflow */
+.quarto-table-wrapper.responsive { overflow-x: auto; }
+
+/* ─── Bibliography & Citations ─────────────────────────────────── */
+.markdown-body .citation-link {
+  color: var(--color-link);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.85em;
+}
+.markdown-body .citation-link:hover {
+  text-decoration: underline;
+}
+
+.markdown-body .bibliography {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid var(--color-border);
+}
+
+.markdown-body .bibliography h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1.25rem;
+  padding-left: 0;
+  border-left: none;
+}
+
+.markdown-body .bib-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.markdown-body .bib-entry {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border-radius: 6px;
+  border-left: 3px solid var(--color-accent);
+}
+
+.markdown-body .bib-entry::before { display: none; }
+
+.markdown-body .bib-entry .bib-number {
+  font-weight: 700;
+  color: var(--color-accent);
+  flex-shrink: 0;
+  min-width: 1.5rem;
+}
+
+.markdown-body .bib-entry .bib-content em {
+  font-style: italic;
+  color: var(--color-text);
+}
+
+.markdown-body .bib-entry a {
+  word-break: break-all;
+  color: var(--color-link);
+}
+
+.markdown-body .bib-entry a:hover {
+  text-decoration: underline;
+}
+
+/* ─── Cross-references ─────────────────────────────────────────── */
+.markdown-body .cross-ref {
+  color: var(--color-link);
+  text-decoration: none;
+  font-weight: 500;
+}
+.markdown-body .cross-ref:hover {
+  text-decoration: underline;
+}
+
+/* ─── Quarto tabsets ───────────────────────────────────────────── */
+.quarto-tabset {
+  margin: 1.5rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.quarto-tabset-tabs {
+  display: flex;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+
+.quarto-tabset-tab {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.quarto-tabset-tab:hover {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.quarto-tabset-tab.active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+}
+
+.quarto-tabset-content {
+  padding: 1rem 1.25rem;
+}
+
+.quarto-tabset-content > *:first-child { margin-top: 0; }
+.quarto-tabset-content > *:last-child { margin-bottom: 0; }
+
+/* ─── Quarto video embeds ──────────────────────────────────────── */
+.markdown-body .quarto-video {
+  margin: 1.5rem 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+/* ─── Quarto pagebreak ─────────────────────────────────────────── */
+.markdown-body hr.quarto-pagebreak {
+  border: none;
+  height: 0;
+  margin: 3rem 0;
+  border-top: 2px dashed var(--color-border);
+  opacity: 0.5;
+}
 
 /* ─── Math (KaTeX) ──────────────────────────────────────────────── */
 .markdown-body .math-display {
