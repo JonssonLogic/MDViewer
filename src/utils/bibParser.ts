@@ -122,9 +122,32 @@ function formatAuthors(authors: string): string {
     .join(', & ') + '.';
 }
 
+/** Get short APA-style author label: "Smith", "Smith & Jones", or "Smith et al." */
+function shortAuthors(authors: string): string {
+  const names = authors.split(/\s+and\s+/).map(a => {
+    const trimmed = a.trim();
+    // "Last, First" → "Last"; "First Last" → "Last"
+    if (trimmed.includes(',')) return trimmed.split(',')[0].trim();
+    const parts = trimmed.split(/\s+/);
+    return parts[parts.length - 1];
+  }).filter(Boolean);
+
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names[0]} et al.`;
+}
+
+/** Get APA-style inline citation text: "Author (Year)" */
+function apaCiteText(entry: BibEntry): string {
+  const author = entry.fields.author ? shortAuthors(entry.fields.author) : entry.key;
+  const year = entry.fields.year ?? '';
+  return year ? `${author} (${year})` : author;
+}
+
 /**
  * Process citation keys in markdown content.
- * Replaces [@key] and [@key1; @key2] with numbered superscript links.
+ * Replaces [@key] and @key with APA-style inline citations: (Author, Year).
  * Skips citations inside HTML tag attributes to avoid breaking tags.
  * Returns the processed content and ordered list of cited keys.
  */
@@ -134,15 +157,13 @@ export function processCitations(
 ): { content: string; citedKeys: string[] } {
   const keyToEntry = new Map(entries.map(e => [e.key, e]));
   const citedKeys: string[] = [];
-  const keyToNumber = new Map<string, number>();
+  const citedSet = new Set<string>();
 
-  function getRef(key: string): string | null {
-    if (!keyToEntry.has(key)) return null;
-    if (!keyToNumber.has(key)) {
+  function trackKey(key: string): void {
+    if (!citedSet.has(key) && keyToEntry.has(key)) {
+      citedSet.add(key);
       citedKeys.push(key);
-      keyToNumber.set(key, citedKeys.length);
     }
-    return String(keyToNumber.get(key)!);
   }
 
   // Split content into HTML tags and text segments, only process text segments
@@ -159,11 +180,12 @@ export function processCitations(
         const keys = inner.split(/\s*;\s*/).map((k: string) => k.replace(/^-?@/, ''));
         const refs: string[] = [];
         for (const key of keys) {
-          const num = getRef(key);
-          if (!num) { refs.push(`[${key}?]`); continue; }
-          refs.push(`<a href="#ref-${key}" class="citation-link">${num}</a>`);
+          const entry = keyToEntry.get(key);
+          if (!entry) { refs.push(`${key}?`); continue; }
+          trackKey(key);
+          refs.push(`<a href="#ref-${key}" class="citation-link">${apaCiteText(entry)}</a>`);
         }
-        return `<sup>[${refs.join(', ')}]</sup>`;
+        return `(${refs.join('; ')})`;
       }
     );
 
@@ -171,9 +193,10 @@ export function processCitations(
     result = result.replace(
       /(?<![[\w@])@([a-zA-Z][\w]*)/g,
       (_match, key: string) => {
-        const num = getRef(key);
-        if (!num) return _match;
-        return `<sup><a href="#ref-${key}" class="citation-link">${num}</a></sup>`;
+        const entry = keyToEntry.get(key);
+        if (!entry) return _match;
+        trackKey(key);
+        return `<a href="#ref-${key}" class="citation-link">${apaCiteText(entry)}</a>`;
       }
     );
 
@@ -193,10 +216,16 @@ export function generateBibliography(
   if (citedKeys.length === 0) return '';
 
   const keyToEntry = new Map(entries.map(e => [e.key, e]));
-  const items = citedKeys.map((key, i) => {
+  // Sort alphabetically by author surname (APA style)
+  const sortedKeys = [...citedKeys].sort((a, b) => {
+    const ea = keyToEntry.get(a), eb = keyToEntry.get(b);
+    const authA = ea?.fields.author ?? a, authB = eb?.fields.author ?? b;
+    return authA.localeCompare(authB);
+  });
+  const items = sortedKeys.map((key) => {
     const entry = keyToEntry.get(key);
     if (!entry) return '';
-    return `<li id="ref-${key}" class="bib-entry"><span class="bib-number">[${i + 1}]</span><span class="bib-content">${formatBibEntry(entry)}</span></li>`;
+    return `<li id="ref-${key}" class="bib-entry"><span class="bib-content">${formatBibEntry(entry)}</span></li>`;
   }).filter(Boolean);
 
   return `\n\n<div class="bibliography">\n<h2>References</h2>\n<ol class="bib-list">\n${items.join('\n')}\n</ol>\n</div>`;

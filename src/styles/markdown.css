@@ -594,8 +594,7 @@ td.raw-line-content {
 .markdown-body .citation-link {
   color: var(--color-link);
   text-decoration: none;
-  font-weight: 600;
-  font-size: 0.85em;
+  font-weight: 500;
 }
 .markdown-body .citation-link:hover {
   text-decoration: underline;
@@ -634,13 +633,6 @@ td.raw-line-content {
 }
 
 .markdown-body .bib-entry::before { display: none; }
-
-.markdown-body .bib-entry .bib-number {
-  font-weight: 700;
-  color: var(--color-accent);
-  flex-shrink: 0;
-  min-width: 1.5rem;
-}
 
 .markdown-body .bib-entry .bib-content em {
   font-style: italic;
