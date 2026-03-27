@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Build script for MDViewer — produces NSIS installer, MSI installer, and portable ZIP.
+    Build script for MDViewer -produces NSIS installer, MSI installer, and portable ZIP.
 
 .DESCRIPTION
     Builds the MDViewer Tauri application and copies the resulting artifacts
@@ -61,7 +61,7 @@ function Assert-Command($cmd, $label) {
         exit 1
     }
     $ver = & $cmd --version 2>&1 | Select-Object -First 1
-    Write-Ok "$label — $ver"
+    Write-Ok "$label -$ver"
 }
 
 # --- Prerequisite check ---
@@ -74,7 +74,7 @@ Assert-Command "cargo" "Rust/Cargo"
 # Check Tauri CLI via npx
 try {
     $tauriVer = & npx tauri --version 2>&1 | Select-Object -First 1
-    Write-Ok "Tauri CLI — $tauriVer"
+    Write-Ok "Tauri CLI -$tauriVer"
 } catch {
     Write-Err "Tauri CLI not found. Run 'npm install' first."
     exit 1
@@ -135,7 +135,7 @@ try {
         }
 
         $patchedJson = $confObj | ConvertTo-Json -Depth 10
-        Set-Content -Path $TauriConfPath -Value $patchedJson -Encoding UTF8
+        [System.IO.File]::WriteAllText($TauriConfPath, $patchedJson)
         $confModified = $true
     }
 
@@ -164,7 +164,7 @@ try {
     # --- Restore original tauri.conf.json ---
     if ($confModified) {
         Write-Step "Restoring original tauri.conf.json"
-        Set-Content -Path $TauriConfPath -Value $confText -Encoding UTF8
+        [System.IO.File]::WriteAllText($TauriConfPath, $confText)
         Write-Ok "Restored"
     }
 }
@@ -227,14 +227,14 @@ if (Test-Path $releaseExe) {
 
     Remove-Item $portableDir -Recurse -Force
 } else {
-    Write-Host "    WARN: $productName.exe not found — skipping portable ZIP" -ForegroundColor Yellow
+    Write-Host "    WARN: $productName.exe not found - skipping portable ZIP" -ForegroundColor Yellow
 }
 
 # --- Summary ---
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  Build Summary — $productName v$version"     -ForegroundColor Cyan
+Write-Host "  Build Summary -$productName v$version"     -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 
 if ($artifacts.Count -eq 0) {
