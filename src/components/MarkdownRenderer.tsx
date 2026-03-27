@@ -24,6 +24,7 @@ interface Props {
   zoomLevel: number;
   theme: 'light' | 'dark';
   baseDir: string;
+  onCommentClick?: (commentId: string, rect: DOMRect) => void;
 }
 
 /** Resolve `..` and `.` segments from a file path */
@@ -54,7 +55,7 @@ function resolveImageSrc(src: string, baseDir: string): string {
   return convertFileSrc(normalizePath(fullPath));
 }
 
-export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir }: Props) {
+export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir, onCommentClick }: Props) {
   const remarkPlugins = useMemo(
     () => [
       remarkGfm,
@@ -129,8 +130,30 @@ export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir }:
         }
         return <div className={className} {...props}>{children}</div>;
       },
+
+      // Comment highlights
+      mark({ className, children, ...props }: any) {
+        const commentId = props['data-comment-id'];
+        if (className === 'comment-highlight' && commentId && onCommentClick) {
+          return (
+            <mark
+              className="comment-highlight"
+              data-comment-id={commentId}
+              onClick={(e) => {
+                e.stopPropagation();
+                const rect = (e.target as HTMLElement).getBoundingClientRect();
+                onCommentClick(commentId, rect);
+              }}
+            >
+              {children}
+              <span className="comment-indicator" />
+            </mark>
+          );
+        }
+        return <mark className={className} {...props}>{children}</mark>;
+      },
     }),
-    [theme, baseDir]
+    [theme, baseDir, onCommentClick]
   );
 
   return (

@@ -4,12 +4,13 @@
 
 > **AI Disclosure:** This project is largely AI-assisted. The majority of the code, architecture, and documentation has been generated and iterated on using [Claude Code](https://claude.ai/code) (Anthropic). Human involvement has been focused on directing features, reviewing output, and making design decisions.
 
-A desktop application for viewing Markdown (`.md`) and Quarto (`.qmd`) files. Built with Tauri v2, React, and TypeScript.
+A desktop application for viewing and commenting on Markdown (`.md`) and Quarto (`.qmd`) files. Built with Tauri v2, React, and TypeScript.
 
 ## Features
 
 - Rich markdown rendering with GFM, math/KaTeX, Mermaid diagrams, and syntax highlighting
 - Quarto (`.qmd`) file support with automatic preprocessing
+- **Inline commenting** — select text to add comments, stored in an AI-readable format inside the file
 - Table of contents with scroll tracking
 - Dark mode
 - Zoom controls (toolbar, keyboard shortcuts, Ctrl+scroll)
@@ -135,29 +136,68 @@ The script modifies only the current user's registry (`HKCU`) — no admin eleva
 
 After registration, the associated files display the MDViewer icon in Explorer and open in MDViewer when double-clicked.
 
+## Commenting System
+
+MDViewer includes a commenting system similar to PDF viewers. Select text in the rendered view, click "Comment", and write your note. Comments are highlighted in the document and can be viewed, edited, or deleted via popups.
+
+### Storage
+
+Comments are stored as a single HTML comment block appended to the end of the file. The document body is never modified, ensuring full compatibility with Quarto and all other markdown renderers (the block is invisible to them).
+
+```markdown
+<!-- === MDVIEWER COMMENTS ===
+Review comments on this document. Each comment targets a specific text passage...
+
+[comment:a1f3] section:"## Introduction" paragraph:2 target:"some text" context:"before {t} after"
+  The comment body here.
+  (2026-03-27)
+=== END MDVIEWER COMMENTS === -->
+```
+
+The block is **self-documenting**: it includes instructions so that any AI (Claude, ChatGPT, etc.) reading the raw file can immediately understand and act on the comments. Each comment identifies its target text by section heading path, paragraph index, exact text match, and surrounding context — designed so an AI can locate and address each comment even after making edits to the document.
+
+### Controls
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+M` | Toggle comment visibility |
+| `Ctrl+S` | Save comments to file |
+| `Escape` | Close any open popup |
+
+The toolbar provides a comment toggle button (with count badge) and a save button that appears when there are unsaved changes.
+
 ## Project Structure
 
 ```
 src/                          # React frontend
-  hooks/useFileLoader.ts      # File open/read/watch + CLI args + drag-drop
+  types/
+    comments.ts               # Comment data types
+  hooks/
+    useTabManager.ts           # Tab lifecycle, file open/read/watch, drag-drop
+    useComments.ts             # Comment state management (CRUD, save, visibility)
   components/
-    MarkdownRenderer.tsx      # react-markdown + remark/rehype pipeline
-    CodeBlock.tsx             # Syntax-highlighted code blocks
-    MermaidBlock.tsx          # Mermaid diagram rendering
-    TableOfContents.tsx       # Auto-generated TOC sidebar
-    Toolbar.tsx               # Top bar (file name, zoom, theme, open)
-    EmptyState.tsx            # Landing screen
+    MarkdownRenderer.tsx       # react-markdown + remark/rehype pipeline + comment highlights
+    CodeBlock.tsx              # Syntax-highlighted code blocks
+    MermaidBlock.tsx           # Mermaid diagram rendering
+    TableOfContents.tsx        # Auto-generated TOC sidebar
+    Toolbar.tsx                # Top bar (zoom, theme, raw view, comments, open)
+    CommentPopup.tsx           # View/edit/delete comment popup
+    CommentInput.tsx           # New comment input popover
+    CommentPanel.tsx           # Sidebar listing all comments
+    EmptyState.tsx             # Landing screen
   utils/
-    qmdPreprocess.ts          # QMD front matter / code chunk stripping
-    remarkCallouts.ts         # Custom callout directive plugin
+    commentParser.ts           # Parse/serialize/anchor/highlight comment blocks
+    qmdPreprocess.ts           # QMD front matter / code chunk stripping
+    remarkCallouts.ts          # Custom callout directive plugin
   styles/
-    global.css                # CSS variables, reset, app shell
-    markdown.css              # Markdown content styling
-    toc.css                   # TOC sidebar styles
+    global.css                 # CSS variables, reset, app shell
+    markdown.css               # Markdown content styling
+    comments.css               # Comment highlights, popups, panel (light + dark)
+    toc.css                    # TOC sidebar styles
 
 src-tauri/                    # Rust backend
   src/lib.rs                  # Tauri setup, plugin registration
-  src/commands.rs             # File read/watch IPC commands
+  src/commands.rs             # File read/write/watch IPC commands
   tauri.conf.json             # App config, window, CLI args, bundling
 
 scripts/

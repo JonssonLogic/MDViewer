@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useTabManager } from './hooks/useTabManager';
+import { useComments } from './hooks/useComments';
 import Toolbar from './components/Toolbar';
 import TabBar from './components/TabBar';
 import EmptyState from './components/EmptyState';
@@ -8,12 +9,16 @@ import MarkdownRenderer from './components/MarkdownRenderer';
 import TableOfContents from './components/TableOfContents';
 import ErrorBoundary from './components/ErrorBoundary';
 import RawSourceView from './components/RawSourceView';
+import CommentPopup from './components/CommentPopup';
+import CommentInput from './components/CommentInput';
+import CommentPanel from './components/CommentPanel';
 import { preprocessQmd, isQmdFile, extractYamlMeta } from './utils/qmdPreprocess';
 import { parseBibtex, type BibEntry } from './utils/bibParser';
 import { invoke } from '@tauri-apps/api/core';
 import './styles/global.css';
 import './styles/toc.css';
 import './styles/markdown.css';
+import './styles/comments.css';
 
 type Theme = 'light' | 'dark';
 
@@ -35,6 +40,7 @@ export default function App() {
     switchTab,
     refreshActiveTab,
     setScrollRef,
+    setSaveGuard,
   } = useTabManager();
 
   const mainRef = useRef<HTMLElement>(null);
@@ -51,6 +57,20 @@ export default function App() {
 
   const fileName = filePath ? (filePath.split(/[\\/]/).pop() ?? '') : '';
   const fileDir = filePath ? filePath.replace(/[\\/][^\\/]*$/, '') : '';
+
+  // ── Comments ─────────────────────────────────────────────────────
+  const {
+    comments,
+    showComments,
+    isDirty: commentsDirty,
+    cleanContent: commentCleanContent,
+    displayContent: commentDisplayContent,
+    addComment,
+    editComment,
+    deleteComment,
+    saveComments,
+    toggleShowComments,
+  } = useComments(filePath, fileContent, setSaveGuard);
 
   // ── Bibliography loading ────────────────────────────────────────
   const [bibEntries, setBibEntries] = useState<BibEntry[]>([]);
@@ -72,11 +92,15 @@ export default function App() {
     return () => { cancelled = true; };
   }, [fileContent, filePath, fileDir]);
 
+  // Use comment-aware content: displayContent has highlights when visible,
+  // commentCleanContent has the block stripped but no highlights
+  const contentForRendering = showComments ? commentDisplayContent : commentCleanContent;
+
   const processedContent = useMemo(() => {
-    if (!fileContent) return '';
-    if (filePath && isQmdFile(filePath)) return preprocessQmd(fileContent, bibEntries);
-    return fileContent;
-  }, [fileContent, filePath, bibEntries]);
+    if (!contentForRendering) return '';
+    if (filePath && isQmdFile(filePath)) return preprocessQmd(contentForRendering, bibEntries);
+    return contentForRendering;
+  }, [contentForRendering, filePath, bibEntries]);
 
   // ── Zoom (CSS zoom on content only) ────────────────────────────
   const [zoomLevel, setZoomLevel] = useState<number>(() => {
@@ -140,6 +164,8 @@ export default function App() {
       if (mod && e.key === 'o') { e.preventDefault(); openFileDialog(); }
       if (mod && e.key === 'r') { e.preventDefault(); refreshActiveTab(); }
       if (mod && e.key === 'u') { e.preventDefault(); toggleRawView(); }
+      if (mod && e.key === 'm') { e.preventDefault(); toggleShowComments(); }
+      if (mod && e.key === 's') { e.preventDefault(); if (commentsDirty) saveComments(); }
       if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomIn(); }
       if (mod && e.key === '-') { e.preventDefault(); zoomOut(); }
       if (mod && e.key === '0') { e.preventDefault(); zoomReset(); }
@@ -160,7 +186,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openFileDialog, refreshActiveTab, zoomIn, zoomOut, zoomReset, toggleRawView, activeTabId, closeTab, switchTab, tabs]);
+  }, [openFileDialog, refreshActiveTab, zoomIn, zoomOut, zoomReset, toggleRawView, toggleShowComments, saveComments, commentsDirty, activeTabId, closeTab, switchTab, tabs]);
 
   // Ctrl+scroll zoom
   useEffect(() => {
@@ -172,6 +198,116 @@ export default function App() {
     window.addEventListener('wheel', handleWheel, { passive: false });
     return () => window.removeEventListener('wheel', handleWheel);
   }, []);
+
+  // ── Comment UI state ────────────────────────────────────────────
+  const [commentPopup, setCommentPopup] = useState<{
+    commentId: string;
+    position: { top: number; left: number };
+  } | null>(null);
+
+  const [commentInput, setCommentInput] = useState<{
+    targetText: string;
+    charOffset: number;
+    position: { top: number; left: number };
+  } | null>(null);
+
+  const [addCommentBtn, setAddCommentBtn] = useState<{
+    position: { top: number; left: number };
+    targetText: string;
+  } | null>(null);
+
+  // Handle text selection → show "Add Comment" button
+  const handleMouseUp = useCallback(() => {
+    if (!showComments || rawView) {
+      setAddCommentBtn(null);
+      return;
+    }
+
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+      // Small delay before hiding to allow clicking the button
+      setTimeout(() => setAddCommentBtn(null), 200);
+      return;
+    }
+
+    const text = sel.toString().trim();
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const mainEl = mainRef.current;
+    if (!mainEl) return;
+
+    const mainRect = mainEl.getBoundingClientRect();
+    setAddCommentBtn({
+      position: {
+        top: rect.bottom - mainRect.top + mainEl.scrollTop + 4,
+        left: rect.left - mainRect.left + rect.width / 2,
+      },
+      targetText: text,
+    });
+  }, [showComments, rawView]);
+
+  // When "Add Comment" button is clicked
+  const handleAddCommentClick = useCallback(() => {
+    if (!addCommentBtn) return;
+    const { targetText, position } = addCommentBtn;
+
+    // Find the offset of this text in the clean content
+    const cleanContent = commentCleanContent;
+    const offset = cleanContent.indexOf(targetText);
+    if (offset === -1) {
+      // Try a more lenient search (collapsed whitespace)
+      const normalizedTarget = targetText.replace(/\s+/g, ' ');
+      const normalizedContent = cleanContent.replace(/\s+/g, ' ');
+      const normOffset = normalizedContent.indexOf(normalizedTarget);
+      if (normOffset === -1) {
+        console.warn('Could not find selected text in source markdown');
+        setAddCommentBtn(null);
+        return;
+      }
+      // Find approximate offset in original content
+      setCommentInput({ targetText, charOffset: normOffset, position });
+    } else {
+      setCommentInput({ targetText, charOffset: offset, position });
+    }
+    setAddCommentBtn(null);
+    window.getSelection()?.removeAllRanges();
+  }, [addCommentBtn, commentCleanContent]);
+
+  // Submit new comment
+  const handleCommentSubmit = useCallback((body: string) => {
+    if (!commentInput) return;
+    addComment(commentInput.targetText, commentInput.charOffset, body);
+    setCommentInput(null);
+  }, [commentInput, addComment]);
+
+  // Handle clicking a comment highlight in the rendered view
+  const handleCommentClick = useCallback((commentId: string, rect: DOMRect) => {
+    const mainEl = mainRef.current;
+    if (!mainEl) return;
+    const mainRect = mainEl.getBoundingClientRect();
+    setCommentPopup({
+      commentId,
+      position: {
+        top: rect.bottom - mainRect.top + mainEl.scrollTop + 4,
+        left: rect.left - mainRect.left,
+      },
+    });
+  }, []);
+
+  // Scroll to a comment from the panel
+  const handleScrollToComment = useCallback((commentId: string) => {
+    const el = document.querySelector(`[data-comment-id="${commentId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Flash the highlight
+      el.classList.add('comment-highlight-flash');
+      setTimeout(() => el.classList.remove('comment-highlight-flash'), 1500);
+    }
+  }, []);
+
+  const activeComment = commentPopup
+    ? comments.find(c => c.id === commentPopup.commentId)
+    : null;
 
   return (
     <div className="app-container">
@@ -185,6 +321,11 @@ export default function App() {
         onToggleTheme={toggleTheme}
         rawView={rawView}
         onToggleRawView={toggleRawView}
+        showComments={showComments}
+        onToggleComments={toggleShowComments}
+        commentCount={comments.length}
+        commentsDirty={commentsDirty}
+        onSaveComments={saveComments}
       />
       <TabBar
         tabs={tabs}
@@ -196,7 +337,12 @@ export default function App() {
         {activeTab ? (
           <>
             {!rawView && <TableOfContents markdown={processedContent} contentRef={mainRef} />}
-            <main className="markdown-content" ref={mainRef} onScroll={handleScroll}>
+            <main
+              className="markdown-content"
+              ref={mainRef}
+              onScroll={handleScroll}
+              onMouseUp={handleMouseUp}
+            >
               {isLoading && <div className="loading-bar" />}
               {error && <p className="content-error">{error}</p>}
               {!fileContent && !isLoading && (
@@ -210,10 +356,59 @@ export default function App() {
                 </div>
               ) : (
                 <ErrorBoundary>
-                  <MarkdownRenderer content={processedContent} zoomLevel={zoomLevel} theme={theme} baseDir={fileDir} />
+                  <MarkdownRenderer
+                    content={processedContent}
+                    zoomLevel={zoomLevel}
+                    theme={theme}
+                    baseDir={fileDir}
+                    onCommentClick={showComments ? handleCommentClick : undefined}
+                  />
                 </ErrorBoundary>
               )}
+
+              {/* Add Comment button (floating near selection) */}
+              {addCommentBtn && showComments && !rawView && (
+                <button
+                  className="add-comment-btn"
+                  style={{ top: addCommentBtn.position.top, left: addCommentBtn.position.left }}
+                  onMouseDown={(e) => { e.preventDefault(); handleAddCommentClick(); }}
+                >
+                  + Comment
+                </button>
+              )}
+
+              {/* Comment input popover */}
+              {commentInput && (
+                <CommentInput
+                  position={commentInput.position}
+                  onSubmit={handleCommentSubmit}
+                  onCancel={() => setCommentInput(null)}
+                />
+              )}
+
+              {/* Comment popup (view/edit/delete) */}
+              {commentPopup && activeComment && (
+                <CommentPopup
+                  commentId={activeComment.id}
+                  body={activeComment.body}
+                  date={activeComment.updatedAt}
+                  targetText={activeComment.targetText}
+                  position={commentPopup.position}
+                  onEdit={editComment}
+                  onDelete={deleteComment}
+                  onClose={() => setCommentPopup(null)}
+                />
+              )}
             </main>
+
+            {/* Comment panel sidebar */}
+            {showComments && !rawView && comments.length > 0 && (
+              <CommentPanel
+                comments={comments}
+                onScrollTo={handleScrollToComment}
+                onDelete={deleteComment}
+              />
+            )}
           </>
         ) : (
           <EmptyState onOpenFile={openFileDialog} error={error} />

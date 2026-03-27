@@ -8,6 +8,11 @@ interface Props {
   onToggleTheme: () => void;
   rawView: boolean;
   onToggleRawView: () => void;
+  showComments: boolean;
+  onToggleComments: () => void;
+  commentCount: number;
+  commentsDirty: boolean;
+  onSaveComments: () => void;
 }
 
 export default function Toolbar({
@@ -20,6 +25,11 @@ export default function Toolbar({
   onToggleTheme,
   rawView,
   onToggleRawView,
+  showComments,
+  onToggleComments,
+  commentCount,
+  commentsDirty,
+  onSaveComments,
 }: Props) {
   return (
     <header className="toolbar">
@@ -45,6 +55,33 @@ export default function Toolbar({
         >
           &lt;/&gt;
         </button>
+
+        {/* Comment toggle */}
+        <button
+          className={`theme-toggle-btn${showComments ? ' comments-active' : ''}`}
+          onClick={onToggleComments}
+          title="Toggle comments (Ctrl+M)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M1 2.5A1.5 1.5 0 012.5 1h11A1.5 1.5 0 0115 2.5v8A1.5 1.5 0 0113.5 12H5l-3.5 3V2.5z"/>
+          </svg>
+          {commentCount > 0 && (
+            <span className="comment-count-badge">{commentCount}</span>
+          )}
+        </button>
+
+        {/* Save comments */}
+        {commentsDirty && (
+          <button
+            className="theme-toggle-btn comment-save-btn"
+            onClick={onSaveComments}
+            title="Save comments (Ctrl+S)"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.5 1H2a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V4.5L11.5 1zM8 13a2 2 0 110-4 2 2 0 010 4zM3 3h8v3H3V3z"/>
+            </svg>
+          </button>
+        )}
 
         {/* Theme toggle */}
         <button className="theme-toggle-btn" onClick={onToggleTheme} title="Toggle dark mode">

@@ -40,9 +40,14 @@ export function useTabManager() {
 
   const pendingPaths = useRef(new Set<string>());
   const scrollRef = useRef<HTMLElement | null>(null);
+  const saveGuardRef = useRef<number>(0);
 
   const setScrollRef = useCallback((el: HTMLElement | null) => {
     scrollRef.current = el;
+  }, []);
+
+  const setSaveGuard = useCallback(() => {
+    saveGuardRef.current = Date.now();
   }, []);
 
   const saveScrollPosition = useCallback(() => {
@@ -162,6 +167,9 @@ export function useTabManager() {
         const matchingTabs = tabsRef.current.filter(t => pathsEqual(t.filePath, changedPath));
         if (matchingTabs.length === 0) return;
 
+        // Skip reload if we just saved (save-guard)
+        if (Date.now() - saveGuardRef.current < 1500) return;
+
         try {
           const content = await invoke<string>('read_file', { path: changedPath });
           setTabs(prev => prev.map(t =>
@@ -238,5 +246,6 @@ export function useTabManager() {
     refreshActiveTab,
     saveScrollPosition,
     setScrollRef,
+    setSaveGuard,
   };
 }
