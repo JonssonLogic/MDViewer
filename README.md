@@ -56,7 +56,7 @@ The `scripts/build.ps1` PowerShell script handles building, packaging, and colle
 
 ### Basic Build
 
-Produces an NSIS installer (`.exe`), an MSI installer (`.msi`), and a portable ZIP in the `./release/` directory:
+Produces an NSIS installer (`.exe`) and a portable ZIP in the `./release/` directory:
 
 ```powershell
 .\scripts\build.ps1
@@ -65,12 +65,6 @@ Produces an NSIS installer (`.exe`), an MSI installer (`.msi`), and a portable Z
 ### Build Options
 
 ```powershell
-# Build only the NSIS installer
-.\scripts\build.ps1 -NsisOnly
-
-# Build only the MSI installer
-.\scripts\build.ps1 -MsiOnly
-
 # Custom output directory
 .\scripts\build.ps1 -OutputDir .\dist
 
@@ -84,7 +78,7 @@ Produces an NSIS installer (`.exe`), an MSI installer (`.msi`), and a portable Z
 Flags can be combined:
 
 ```powershell
-.\scripts\build.ps1 -NsisOnly -WithFileAssociations -OutputDir .\dist
+.\scripts\build.ps1 -WithFileAssociations -OutputDir .\dist
 ```
 
 ### Build Output
@@ -94,7 +88,6 @@ After a successful build, the output directory contains:
 | File | Description |
 |------|-------------|
 | `MDViewer_<version>_x64-setup.exe` | NSIS installer for Windows |
-| `MDViewer_<version>_x64_en-US.msi` | MSI installer for Windows |
 | `MDViewer-<version>-portable.zip` | Portable ZIP (exe + file association script) |
 
 The build summary also prints SHA256 hashes for each artifact.
