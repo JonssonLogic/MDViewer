@@ -91,7 +91,8 @@ export function preprocessQmd(content: string, bibEntries?: BibEntry[]): string 
   result = result.replace(/^---\n[\s\S]*?\n---\n?/, '');
 
   // 1b. Strip HTML comments (including multi-line where --> is on its own line)
-  result = result.replace(/<!--[\s\S]*?-->/g, '');
+  // Replace with newline to preserve blank-line separation between surrounding elements
+  result = result.replace(/<!--[\s\S]*?-->/g, '\n');
 
   // 2. Strip executable code chunks: ```{lang...}...```
   result = result.replace(
@@ -118,7 +119,7 @@ export function preprocessQmd(content: string, bibEntries?: BibEntry[]): string 
       let html = `<img src="${src}" alt="${effectiveAlt}"${buildHtmlAttrs(parsed)} />`;
 
       if (figCaption) {
-        html = `<figure>${html}<figcaption>${figCaption}</figcaption></figure>`;
+        html = `\n<figure>${html}<figcaption>${figCaption}</figcaption></figure>\n`;
       }
       return html;
     }
@@ -262,7 +263,7 @@ export function preprocessQmd(content: string, bibEntries?: BibEntry[]): string 
   result = result.replace(
     /^!\[([^\]]*@[^\]]*)\]\(([^)]+)\)\s*$/gm,
     (_match, alt: string, src: string) => {
-      return `<figure><img src="${src}" alt="" /><figcaption>${alt}</figcaption></figure>`;
+      return `\n<figure><img src="${src}" alt="" /><figcaption>${alt}</figcaption></figure>\n`;
     }
   );
 
