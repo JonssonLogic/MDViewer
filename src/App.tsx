@@ -22,6 +22,76 @@ import './styles/comments.css';
 
 type Theme = 'light' | 'dark';
 
+// ── Comment selection helpers ─────────────────────────────────────────
+
+/**
+ * Extract source-faithful text from a DOM range by replacing KaTeX with its
+ * original LaTeX source (from the MathML annotation) and stripping images.
+ */
+function extractSourceTextFromRange(range: Range): string {
+  try {
+    const fragment = range.cloneContents();
+    fragment.querySelectorAll('.katex').forEach(el => {
+      const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
+      const isDisplay = el.parentElement?.classList.contains('katex-display');
+      if (annotation?.textContent) {
+        const delim = isDisplay ? '$$' : '$';
+        el.replaceWith(`${delim}${annotation.textContent}${delim}`);
+      }
+    });
+    fragment.querySelectorAll('img').forEach(el => el.remove());
+    return (fragment.textContent ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/** Try to find text in markdown source — exact first, then whitespace-normalized. */
+function findInContent(text: string, content: string): number {
+  if (!text) return -1;
+  const direct = content.indexOf(text);
+  if (direct !== -1) return direct;
+  const norm = text.replace(/\s+/g, ' ').trim();
+  const normContent = content.replace(/\s+/g, ' ');
+  return normContent.indexOf(norm);
+}
+
+/**
+ * Find an approximate source offset by walking up the DOM to the nearest block
+ * element and matching its first plain-text words (skipping KaTeX MathML).
+ */
+function findOffsetFromDOMRange(range: Range, cleanContent: string): number {
+  const startNode = range.startContainer;
+  let el: Element | null = startNode.nodeType === Node.TEXT_NODE
+    ? startNode.parentElement
+    : startNode as Element;
+
+  const blockTags = new Set(['P', 'LI', 'TD', 'TH', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE']);
+  while (el && !blockTags.has(el.tagName)) el = el.parentElement;
+  if (!el) return -1;
+
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const parts: string[] = [];
+  let node = walker.nextNode();
+  while (node) {
+    let p: Element | null = node.parentElement;
+    let skip = false;
+    while (p && p !== el) {
+      if (p.classList?.contains('katex-mathml')) { skip = true; break; }
+      p = p.parentElement;
+    }
+    if (!skip && node.textContent?.trim()) {
+      parts.push(node.textContent);
+      if (parts.join('').trim().length >= 30) break;
+    }
+    node = walker.nextNode();
+  }
+
+  const probe = parts.join('').trim().slice(0, 30);
+  if (probe.length < 3) return -1;
+  return cleanContent.indexOf(probe);
+}
+
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2.0;
 const ZOOM_STEP = 0.1;
@@ -200,6 +270,8 @@ export default function App() {
   }, []);
 
   // ── Comment UI state ────────────────────────────────────────────
+  const savedRangeRef = useRef<Range | null>(null);
+
   const [commentPopup, setCommentPopup] = useState<{
     commentId: string;
     position: { top: number; left: number };
@@ -232,6 +304,7 @@ export default function App() {
 
     const text = sel.toString().trim();
     const range = sel.getRangeAt(0);
+    savedRangeRef.current = range.cloneRange();
     const rect = range.getBoundingClientRect();
     const mainEl = mainRef.current;
     if (!mainEl) return;
@@ -250,25 +323,45 @@ export default function App() {
   const handleAddCommentClick = useCallback(() => {
     if (!addCommentBtn) return;
     const { targetText, position } = addCommentBtn;
-
-    // Find the offset of this text in the clean content
     const cleanContent = commentCleanContent;
-    const offset = cleanContent.indexOf(targetText);
-    if (offset === -1) {
-      // Try a more lenient search (collapsed whitespace)
-      const normalizedTarget = targetText.replace(/\s+/g, ' ');
-      const normalizedContent = cleanContent.replace(/\s+/g, ' ');
-      const normOffset = normalizedContent.indexOf(normalizedTarget);
-      if (normOffset === -1) {
-        console.warn('Could not find selected text in source markdown');
-        setAddCommentBtn(null);
-        return;
+
+    let offset = -1;
+    let resolvedTarget = targetText;
+
+    // Strategy 1: exact + whitespace-normalized match
+    offset = findInContent(targetText, cleanContent);
+
+    // Strategy 2: replace KaTeX rendering with LaTeX source, strip images
+    if (offset === -1 && savedRangeRef.current) {
+      const sourceText = extractSourceTextFromRange(savedRangeRef.current);
+      if (sourceText && sourceText !== targetText) {
+        offset = findInContent(sourceText, cleanContent);
+        if (offset !== -1) resolvedTarget = sourceText;
       }
-      // Find approximate offset in original content
-      setCommentInput({ targetText, charOffset: normOffset, position });
-    } else {
-      setCommentInput({ targetText, charOffset: offset, position });
     }
+
+    // Strategy 3: first non-empty line only (handles multi-item lists, table rows)
+    if (offset === -1) {
+      const firstLine = targetText.split('\n').find(l => l.trim())?.trim() ?? '';
+      if (firstLine && firstLine !== targetText) {
+        offset = findInContent(firstLine, cleanContent);
+        if (offset !== -1) resolvedTarget = firstLine;
+      }
+    }
+
+    // Strategy 4: DOM position fallback — anchor to surrounding paragraph
+    if (offset === -1 && savedRangeRef.current) {
+      offset = findOffsetFromDOMRange(savedRangeRef.current, cleanContent);
+      if (offset !== -1) resolvedTarget = targetText.slice(0, 60).trim();
+    }
+
+    if (offset === -1) {
+      console.warn('Could not find selection in source markdown');
+      setAddCommentBtn(null);
+      return;
+    }
+
+    setCommentInput({ targetText: resolvedTarget, charOffset: offset, position });
     setAddCommentBtn(null);
     window.getSelection()?.removeAllRanges();
   }, [addCommentBtn, commentCleanContent]);
