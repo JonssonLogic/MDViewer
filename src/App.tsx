@@ -28,17 +28,56 @@ type Theme = 'light' | 'dark';
  * Extract source-faithful text from a DOM range by replacing KaTeX with its
  * original LaTeX source (from the MathML annotation) and stripping images.
  */
+/** Walk up the live DOM from `node` to find the nearest .katex ancestor, or null. */
+function findKatexAncestor(node: Node): Element | null {
+  let n: Node | null = node;
+  while (n) {
+    if (n.nodeType === Node.ELEMENT_NODE && (n as Element).classList?.contains('katex')) {
+      return n as Element;
+    }
+    n = n.parentNode;
+  }
+  return null;
+}
+
 function extractSourceTextFromRange(range: Range): string {
   try {
     const fragment = range.cloneContents();
-    fragment.querySelectorAll('.katex').forEach(el => {
-      const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
-      const isDisplay = el.parentElement?.classList.contains('katex-display');
-      if (annotation?.textContent) {
-        const delim = isDisplay ? '$$' : '$';
-        el.replaceWith(`${delim}${annotation.textContent}${delim}`);
+    const katexEls = fragment.querySelectorAll('.katex');
+
+    if (katexEls.length === 0) {
+      // Selection is entirely within a .katex element — cloneContents() yields only
+      // a partial .katex-html subtree with no .katex root. Walk up the live DOM instead.
+      const liveKatex = findKatexAncestor(range.startContainer);
+      if (liveKatex) {
+        const annotation = liveKatex.querySelector('annotation[encoding="application/x-tex"]');
+        if (annotation?.textContent) {
+          const delim = liveKatex.parentElement?.classList.contains('katex-display') ? '$$' : '$';
+          return `${delim}${annotation.textContent}${delim}`;
+        }
       }
-    });
+    } else {
+      katexEls.forEach(el => {
+        let annotation = el.querySelector('annotation[encoding="application/x-tex"]');
+        let isDisplay = el.parentElement?.classList.contains('katex-display') ?? false;
+
+        // If the annotation is absent, the selection started inside this .katex element
+        // (so .katex-mathml was excluded from the clone). Retrieve it from the live DOM.
+        if (!annotation) {
+          const liveKatex = findKatexAncestor(range.startContainer);
+          if (liveKatex) {
+            annotation = liveKatex.querySelector('annotation[encoding="application/x-tex"]');
+            isDisplay = liveKatex.parentElement?.classList.contains('katex-display') ?? false;
+          }
+        }
+
+        if (annotation?.textContent) {
+          const delim = isDisplay ? '$$' : '$';
+          el.replaceWith(`${delim}${annotation.textContent}${delim}`);
+        }
+      });
+    }
+
     fragment.querySelectorAll('img').forEach(el => el.remove());
     return (fragment.textContent ?? '').trim();
   } catch {
@@ -90,6 +129,79 @@ function findOffsetFromDOMRange(range: Range, cleanContent: string): number {
   const probe = parts.join('').trim().slice(0, 30);
   if (probe.length < 3) return -1;
   return cleanContent.indexOf(probe);
+}
+
+/**
+ * Count visible text characters from the start of the nearest block element to
+ * range.startContainer[startOffset]. Used to rank duplicate-word occurrences by
+ * how close they are to the actual selection position.
+ */
+function estimateSelectionOffsetInBlock(range: Range): number {
+  const startNode = range.startContainer;
+  let blockEl: Element | null = startNode.nodeType === Node.TEXT_NODE
+    ? startNode.parentElement
+    : startNode as Element;
+
+  const blockTags = new Set(['P', 'LI', 'TD', 'TH', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE']);
+  while (blockEl && !blockTags.has(blockEl.tagName)) blockEl = blockEl.parentElement;
+  if (!blockEl) return 0;
+
+  const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
+  let count = 0;
+  let node = walker.nextNode();
+  while (node) {
+    if (node === startNode) {
+      count += range.startOffset;
+      break;
+    }
+    let p: Element | null = node.parentElement;
+    let skip = false;
+    while (p && p !== blockEl) {
+      if (p.classList?.contains('katex-mathml')) { skip = true; break; }
+      p = p.parentElement;
+    }
+    if (!skip) count += node.textContent?.length ?? 0;
+    node = walker.nextNode();
+  }
+  return count;
+}
+
+/**
+ * Return true if `offset` falls inside an inline math expression ($...$) in `content`.
+ * Counts unescaped single-$ delimiters before the offset; odd count means we're inside math.
+ * $$ pairs are skipped (display math) so they don't affect the inline count.
+ */
+function isOffsetInsideInlineMath(content: string, offset: number): boolean {
+  let count = 0;
+  let i = 0;
+  while (i < offset) {
+    if (content[i] === '$') {
+      if (content[i + 1] === '$') {
+        i += 2; // skip display math delimiter pair — doesn't affect inline count
+        continue;
+      }
+      if (i === 0 || content[i - 1] !== '\\') {
+        count++;
+      }
+    }
+    i++;
+  }
+  return count % 2 === 1;
+}
+
+/** Among all occurrences of `text` in `content`, return the index nearest to `approxOffset`. */
+function findClosestOccurrence(text: string, content: string, approxOffset: number): number {
+  let pos = 0;
+  let bestIdx = -1;
+  let bestDist = Infinity;
+  while (true) {
+    const idx = content.indexOf(text, pos);
+    if (idx === -1) break;
+    const dist = Math.abs(idx - approxOffset);
+    if (dist < bestDist) { bestDist = dist; bestIdx = idx; }
+    pos = idx + 1;
+  }
+  return bestIdx;
 }
 
 const ZOOM_MIN = 0.5;
@@ -328,8 +440,23 @@ export default function App() {
     let offset = -1;
     let resolvedTarget = targetText;
 
-    // Strategy 1: exact + whitespace-normalized match
+    // Strategy 1: exact + whitespace-normalized match, with DOM disambiguation for
+    // repeated targets (findInContent always returns the first hit, but the user may
+    // have selected a later occurrence in the same paragraph).
+    // If the hit lands inside a $...$ expression, discard it — Strategy 2 will extract
+    // the full LaTeX source form and find the correct $...$ boundary.
     offset = findInContent(targetText, cleanContent);
+    if (offset !== -1 && savedRangeRef.current) {
+      const blockOffset = findOffsetFromDOMRange(savedRangeRef.current, cleanContent);
+      if (blockOffset !== -1) {
+        const approxOffset = blockOffset + estimateSelectionOffsetInBlock(savedRangeRef.current);
+        const closest = findClosestOccurrence(targetText, cleanContent, approxOffset);
+        if (closest !== -1) offset = closest;
+      }
+    }
+    if (offset !== -1 && isOffsetInsideInlineMath(cleanContent, offset)) {
+      offset = -1; // let Strategy 2 expand to the full $...$ expression
+    }
 
     // Strategy 2: replace KaTeX rendering with LaTeX source, strip images
     if (offset === -1 && savedRangeRef.current) {

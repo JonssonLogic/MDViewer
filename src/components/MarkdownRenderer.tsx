@@ -11,6 +11,7 @@ import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeRaw from 'rehype-raw';
 import rehypeHighlight from 'rehype-highlight';
+import katex from 'katex';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { remarkCallouts } from '../utils/remarkCallouts';
 import CodeBlock from './CodeBlock';
@@ -18,6 +19,17 @@ import MermaidBlock from './MermaidBlock';
 import TabsetBlock from './TabsetBlock';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
+
+/** Render inline math ($...$) in a plain text string to KaTeX HTML. */
+function renderInlineMath(text: string): string {
+  return text.replace(/\$(?!\$)([^$\n]+)\$(?!\$)/g, (_, math) => {
+    try {
+      return katex.renderToString(math, { throwOnError: false });
+    } catch {
+      return `$${math}$`;
+    }
+  });
+}
 
 interface Props {
   content: string;
@@ -116,7 +128,7 @@ export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir, o
           return (
             <figure>
               <img src={resolved} alt={alt} {...props} />
-              <figcaption>{alt}</figcaption>
+              <figcaption dangerouslySetInnerHTML={{ __html: renderInlineMath(alt) }} />
             </figure>
           );
         }
@@ -135,6 +147,13 @@ export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir, o
       mark({ className, children, ...props }: any) {
         const commentId = props['data-comment-id'];
         if (className === 'comment-highlight' && commentId && onCommentClick) {
+          // If the highlighted content is a LaTeX expression ($...$), render it with
+          // KaTeX so the math displays correctly inside the highlight.
+          const textContent = typeof children === 'string' ? children : '';
+          const isInlineMath = /^\$(?!\$)[^$]+\$(?!\$)$/.test(textContent);
+          const displayContent = isInlineMath
+            ? <span dangerouslySetInnerHTML={{ __html: renderInlineMath(textContent) }} />
+            : children;
           return (
             <mark
               className="comment-highlight"
@@ -145,7 +164,7 @@ export default function MarkdownRenderer({ content, zoomLevel, theme, baseDir, o
                 onCommentClick(commentId, rect);
               }}
             >
-              {children}
+              {displayContent}
               <span className="comment-indicator" />
             </mark>
           );

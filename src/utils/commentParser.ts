@@ -207,7 +207,9 @@ function parseCommentEntries(blockContent: string): Comment[] {
     const header = entry.headerLine;
     const section = extractQuoted(header, 'section:') ?? '(preamble)';
     const paragraph = extractInt(header, 'paragraph:') ?? 1;
+    const paraStart = extractQuoted(header, 'paraStart:') ?? undefined;
     const target = extractQuoted(header, 'target:') ?? '';
+    const paraOffset = extractInt(header, 'paraOffset:') ?? undefined;
     const context = extractQuoted(header, 'context:') ?? '';
 
     // Parse context into before/after using {t} marker
@@ -239,7 +241,9 @@ function parseCommentEntries(blockContent: string): Comment[] {
       id: entry.id,
       section,
       paragraph,
+      ...(paraStart !== undefined && { paraStart }),
       targetText: target,
+      ...(paraOffset !== undefined && { targetOffsetInPara: paraOffset }),
       contextBefore,
       contextAfter,
       body: contentLines.join('\n'),
@@ -266,7 +270,7 @@ function extractQuoted(str: string, prefix: string): string | null {
     if (str[end] === '"') break;
     end++;
   }
-  return str.slice(start + 1, end).replace(/\\"/g, '"');
+  return str.slice(start + 1, end).replace(/\\(["\\])/g, '$1');
 }
 
 function extractInt(str: string, prefix: string): number | null {
@@ -303,7 +307,9 @@ export function serializeComments(
   for (const c of comments) {
     lines.push('');
     const context = `${escapeQuoted(c.contextBefore)}{t}${escapeQuoted(c.contextAfter)}`;
-    const header = `[comment:${c.id}] section:"${escapeQuoted(c.section)}" paragraph:${c.paragraph} target:"${escapeQuoted(c.targetText)}" context:"${context}"`;
+    const paraStartPart = c.paraStart ? ` paraStart:"${escapeQuoted(c.paraStart)}"` : '';
+    const paraOffsetPart = c.targetOffsetInPara !== undefined ? ` paraOffset:${c.targetOffsetInPara}` : '';
+    const header = `[comment:${c.id}] section:"${escapeQuoted(c.section)}" paragraph:${c.paragraph}${paraStartPart} target:"${escapeQuoted(c.targetText)}"${paraOffsetPart} context:"${context}"`;
     lines.push(header);
     // Indent body lines
     for (const bodyLine of c.body.split('\n')) {
@@ -336,15 +342,26 @@ export function anchorComments(
   return comments.map((comment) => {
     const resolved = { ...comment, orphaned: false, _offset: undefined as number | undefined };
 
-    // Layer 1: Full path — section → paragraph → target
+    // Layer 1: Full path — section → paragraph (by index) → target
     const section = sections.find((s) => s.path === comment.section);
     if (section) {
       const para = section.paragraphs[comment.paragraph - 1];
       if (para) {
-        const idx = para.text.indexOf(comment.targetText);
-        if (idx !== -1) {
-          // Find actual offset by searching in the original content slice
-          const absIdx = cleanContent.indexOf(comment.targetText, para.start);
+        const absIdx = findTargetInPara(cleanContent, para, comment.targetText, comment.targetOffsetInPara);
+        if (absIdx !== -1) {
+          resolved._offset = absIdx;
+          return resolved;
+        }
+      }
+
+      // Layer 1.5: Paragraph fingerprint (paraStart) — handles shifted paragraph indices
+      if (comment.paraStart) {
+        const needle = comment.paraStart.slice(0, 30);
+        const fingerprintPara = section.paragraphs.find((p) =>
+          p.text.replace(/\s+/g, ' ').trim().startsWith(needle)
+        );
+        if (fingerprintPara) {
+          const absIdx = findTargetInPara(cleanContent, fingerprintPara, comment.targetText, comment.targetOffsetInPara);
           if (absIdx !== -1) {
             resolved._offset = absIdx;
             return resolved;
@@ -384,10 +401,96 @@ export function anchorComments(
       return resolved;
     }
 
+    // Layer 3.5: Normalized fallback — strip markdown delimiters and collapse whitespace,
+    // then retry the global search. Catches cases where the source was lightly reformatted
+    // (e.g. **word** → word, $expr$ → expr, or extra whitespace changes).
+    const normalizedTarget = normalizeForSearch(comment.targetText);
+    if (normalizedTarget && normalizedTarget !== comment.targetText) {
+      const normalizedContent = normalizeForSearch(cleanContent);
+      const normMatches = findAllOccurrences(normalizedContent, normalizedTarget);
+      if (normMatches.length >= 1) {
+        // Map the normalized offset back to the original content offset.
+        // The normalized content may be shorter, so we do a forward scan to find the
+        // corresponding position in the original.
+        const normOffset = normMatches[0];
+        resolved._offset = mapNormalizedOffset(cleanContent, normalizedContent, normOffset);
+        return resolved;
+      }
+    }
+
     // Layer 4: Not found — orphaned
     resolved.orphaned = true;
     return resolved;
   });
+}
+
+/**
+ * Strip markdown delimiters ($, *, _, `, ~) and collapse whitespace.
+ * Used for fuzzy fallback matching when exact search fails.
+ */
+function normalizeForSearch(text: string): string {
+  return text
+    .replace(/[$*_`~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Given a character offset in a normalized string, find the corresponding
+ * offset in the original string by scanning both in parallel.
+ */
+function mapNormalizedOffset(original: string, normalized: string, normOffset: number): number {
+  let o = 0; // original index
+  let n = 0; // normalized index
+  const stripped = /[$*_`~\s]/;
+  while (o < original.length && n < normOffset) {
+    const ch = original[o];
+    if (!stripped.test(ch)) {
+      n++;
+    } else if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+      // Collapsed whitespace: skip all consecutive whitespace in original,
+      // but only advance n once (for the single space it maps to).
+      if (n < normOffset && normalized[n] === ' ') n++;
+      while (o + 1 < original.length && /\s/.test(original[o + 1])) o++;
+    }
+    o++;
+  }
+  return Math.min(o, original.length);
+}
+
+/**
+ * Find the best absolute offset of `targetText` within `para`, optionally using
+ * `targetOffsetInPara` to pick the closest occurrence when multiple exist.
+ * Returns -1 if not found.
+ */
+function findTargetInPara(
+  cleanContent: string,
+  para: { text: string; start: number; end: number },
+  targetText: string,
+  targetOffsetInPara?: number
+): number {
+  if (!targetText) return -1;
+  const occurrences: number[] = [];
+  let pos = 0;
+  while (true) {
+    const i = para.text.indexOf(targetText, pos);
+    if (i === -1) break;
+    occurrences.push(i);
+    pos = i + 1;
+  }
+  if (occurrences.length === 0) return -1;
+
+  let bestParaOffset: number;
+  if (occurrences.length === 1 || targetOffsetInPara === undefined) {
+    bestParaOffset = occurrences[0];
+  } else {
+    // Pick the occurrence whose index in the paragraph is closest to targetOffsetInPara
+    bestParaOffset = occurrences.reduce((best, cur) =>
+      Math.abs(cur - targetOffsetInPara) < Math.abs(best - targetOffsetInPara) ? cur : best
+    );
+  }
+
+  return cleanContent.indexOf(targetText, para.start + bestParaOffset);
 }
 
 function findAllOccurrences(text: string, search: string): number[] {
@@ -447,12 +550,13 @@ export function generateCommentId(): string {
 }
 
 /**
- * Given a character offset in clean content, determine the section path and paragraph index.
+ * Given a character offset in clean content, determine the section path, paragraph index,
+ * paragraph start fingerprint, and offset of the target within the paragraph.
  */
 export function locatePosition(
   cleanContent: string,
   offset: number
-): { section: string; paragraph: number } {
+): { section: string; paragraph: number; paraStart: string; targetOffsetInPara: number } {
   const sections = buildSectionMap(cleanContent);
 
   // Find the most specific (deepest) section containing this offset
@@ -466,39 +570,47 @@ export function locatePosition(
   }
 
   if (!bestSection) {
-    return { section: '(preamble)', paragraph: 1 };
+    return { section: '(preamble)', paragraph: 1, paraStart: '', targetOffsetInPara: 0 };
   }
 
   // Find which paragraph
   let paragraphIdx = 1;
+  let foundPara: { text: string; start: number; end: number } | null = null;
   for (let i = 0; i < bestSection.paragraphs.length; i++) {
     const p = bestSection.paragraphs[i];
     if (offset >= p.start && offset < p.end + 1) {
       paragraphIdx = i + 1;
+      foundPara = p;
       break;
     }
     if (offset < p.start) {
-      // Between paragraphs — assign to the previous one or the next
       paragraphIdx = Math.max(1, i);
+      foundPara = bestSection.paragraphs[paragraphIdx - 1] ?? null;
       break;
     }
-    paragraphIdx = i + 1; // default to last paragraph seen
+    paragraphIdx = i + 1;
+    foundPara = p;
   }
 
-  return { section: bestSection.path, paragraph: paragraphIdx };
+  const paraStart = foundPara
+    ? foundPara.text.slice(0, 40).replace(/\s+/g, ' ').trim()
+    : '';
+  const targetOffsetInPara = foundPara ? Math.max(0, offset - foundPara.start) : 0;
+
+  return { section: bestSection.path, paragraph: paragraphIdx, paraStart, targetOffsetInPara };
 }
 
 /**
  * Extract context around a target text at a given offset.
- * Returns ~80 chars (or sentence boundary) before and after.
+ * Returns ~200 chars (or sentence boundary) before and after.
  */
 export function extractContext(
   cleanContent: string,
   offset: number,
   targetLength: number
 ): { contextBefore: string; contextAfter: string } {
-  // Look for sentence boundaries or take ~80 chars
-  const CONTEXT_LEN = 80;
+  // Look for sentence boundaries or take ~200 chars
+  const CONTEXT_LEN = 200;
 
   let beforeStart = Math.max(0, offset - CONTEXT_LEN);
   const beforeText = cleanContent.slice(beforeStart, offset);

@@ -65,7 +65,7 @@ export function useComments(
     body: string
   ) => {
     const clean = cleanContentRef.current;
-    const { section, paragraph } = locatePosition(clean, charOffset);
+    const { section, paragraph, paraStart, targetOffsetInPara } = locatePosition(clean, charOffset);
     const { contextBefore, contextAfter } = extractContext(clean, charOffset, targetText.length);
     const now = new Date().toISOString().slice(0, 10);
 
@@ -73,7 +73,9 @@ export function useComments(
       id: generateCommentId(),
       section,
       paragraph,
+      paraStart,
       targetText,
+      targetOffsetInPara,
       contextBefore,
       contextAfter,
       body,

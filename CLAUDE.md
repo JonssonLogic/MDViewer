@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MDViewer is a Tauri v2 desktop application for viewing and commenting on Markdown (`.md`) and Quarto (`.qmd`) files. It uses a React + TypeScript frontend (Vite) and a Rust backend. Features include rich markdown rendering, syntax highlighting, math/KaTeX, Mermaid diagrams, callouts, a table of contents, zoom controls, dark mode, live file reload, and an inline commenting system with AI-readable storage.
+MDViewer is a Tauri v2 desktop application for viewing and commenting on Markdown (`.md`) and Quarto (`.qmd`) files. It uses a React + TypeScript frontend (Vite) and a Rust backend. Features include rich markdown rendering, syntax highlighting, math/KaTeX, Mermaid diagrams, callouts, a table of contents, zoom controls, dark mode, live file reload, multi-file tabs, a raw source view, bibliography/citation rendering, Quarto tabset support, and an inline commenting system with AI-readable storage.
 
 ## Commands
 
@@ -18,6 +18,7 @@ Node.js and Rust/Cargo are added permanently to `~/.bashrc` — no PATH prefix n
 | `cd src-tauri && cargo build` | Compile Rust backend only |
 | `cd src-tauri && cargo check` | Type-check Rust without full build |
 | `npm run lint` | Run ESLint on the frontend |
+| `.\scripts\build.ps1 -WithFileAssociations` | Build distributable with `.md`/`.qmd` file associations |
 
 ## Architecture
 
@@ -39,7 +40,10 @@ src/
     MarkdownRenderer.tsx       # react-markdown + full remark/rehype pipeline + image resolution + comment highlights
     CodeBlock.tsx              # Syntax-highlighted code with language badge + copy button
     MermaidBlock.tsx           # Client-side mermaid rendering (theme-aware)
+    TabBar.tsx                 # Multi-file tab bar (open files, switch, close, middle-click close)
+    TabsetBlock.tsx            # Interactive Quarto panel-tabset renderer
     TableOfContents.tsx        # Auto-generated TOC with IntersectionObserver
+    RawSourceView.tsx          # Raw source view with custom markdown/QMD syntax highlighting
     Toolbar.tsx                # Top bar: zoom, theme, raw view, comment toggle, save button, Open
     CommentPopup.tsx           # Floating popup to view/edit/delete a comment
     CommentInput.tsx           # Floating input popover for creating new comments
@@ -48,7 +52,8 @@ src/
     ErrorBoundary.tsx          # React error boundary for render crashes
   utils/
     commentParser.ts           # Parse/serialize/anchor/highlight-inject comment blocks
-    qmdPreprocess.ts           # Strip QMD front matter, code chunks, Pandoc attributes, fenced divs
+    qmdPreprocess.ts           # Strip QMD front matter, code chunks, Pandoc attributes, fenced divs, citation rendering
+    bibParser.ts               # BibTeX parser + citation processor + bibliography generator
     remarkCallouts.ts          # Custom remark plugin for :::note/tip/warning callout directives
   styles/
     global.css                 # CSS variables (light + dark), reset, toolbar, zoom controls, app shell
@@ -68,19 +73,35 @@ src/
 ### Markdown Pipeline
 `react-markdown` with a unified remark/rehype plugin chain:
 - **remark plugins**: `remark-gfm`, `remark-math`, `remark-directive`, `remark-gemoji`, `remark-definition-list`, custom `remarkCallouts`
-- **rehype plugins**: `rehype-katex`, `rehype-slug`, `rehype-autolink-headings`, `rehype-highlight`
-- Custom component overrides for `code` (routes mermaid to `MermaidBlock`, others to `CodeBlock`), `pre` (pass-through), `img` (resolves relative paths via `convertFileSrc`), and `mark` (renders comment highlights with click handler)
+- **rehype plugins**: `rehype-katex`, `rehype-slug`, `rehype-autolink-headings`, `rehype-highlight`, `rehype-raw`
+- Custom component overrides for `code` (routes mermaid to `MermaidBlock`, others to `CodeBlock`), `pre` (pass-through), `img` (resolves relative paths via `convertFileSrc`), `div` (routes Quarto panel-tabsets to `TabsetBlock`), and `mark` (renders comment highlights with click handler)
 - KaTeX CSS and highlight.js `github-dark` theme are imported in `MarkdownRenderer.tsx`
 
 ### Image Path Resolution
 Images with relative paths (e.g. `![](../graphics/fig.png)`) are resolved against the open file's directory. Paths are normalized to remove `..` segments (required by Tauri's asset protocol), then converted to `asset://` URLs via `convertFileSrc()`. Requires the `protocol-asset` Tauri feature and `assetProtocol.scope: ["**"]` in `tauri.conf.json`.
 
 ### QMD Preprocessing
-Before passing `.qmd` content to `react-markdown`, `qmdPreprocess.ts` strips:
-1. YAML front matter (`---` ... `---` at file start)
+Before passing `.qmd` content to `react-markdown`, `qmdPreprocess.ts` strips and transforms:
+1. YAML front matter (`---` ... `---` at file start), with `extractYamlMeta()` to extract `bibliography` and `title`
 2. Executable code chunks (`` ```{python} ``, `` ```{r} ``, etc.)
 3. Pandoc/Quarto attribute annotations on images/links (`{width=565}`, `{.class}`, etc.)
 4. Quarto fenced div markers (`::: {layout-ncol=2}` ... `:::`)
+5. `panel-tabset` divs — converted to `<div data-tab-label="...">` structure for `TabsetBlock`
+6. Bibliography citations (`[@key]`) — resolved via `bibParser.ts` and appended as an HTML references section
+
+### Bibliography / Citations
+For `.qmd` files, `App.tsx` reads the `bibliography` field from YAML front matter, loads the `.bib` file via `invoke('read_file')`, and passes parsed `BibEntry[]` to `preprocessQmd()`. The `bibParser.ts` module provides:
+- `parseBibtex(content)` — parses BibTeX into `BibEntry[]`
+- `processCitations(content, entries)` — replaces `[@key]` / `[@key1; @key2]` inline citations with numbered superscripts
+- `generateBibliography(citedKeys, entries)` — produces an HTML reference list
+
+The bibliography is inserted at a `::: {#refs} :::` placeholder if present, otherwise appended at the end.
+
+### Raw Source View
+Toggled with `Ctrl+U` or the toolbar button. `RawSourceView.tsx` renders the file's raw content as a line-numbered table with custom syntax highlighting — a lightweight tokenizer that color-codes YAML front matter, headings, code fences, math, links, images, table pipes, HTML comments, callout markers, citations, Quarto shortcodes, and inline attributes. Always shows the unprocessed file content (not the comment-stripped or QMD-preprocessed version).
+
+### Tabs
+`useTabManager.ts` manages multiple open files as tabs. Each `Tab` holds `filePath`, `fileContent`, `scrollTop`, `isLoading`, and `error`. Tabs can be opened via the toolbar, drag-and-drop, CLI args, or `Ctrl+click` on links. `TabBar.tsx` renders the tab strip; middle-click or the × button closes a tab. `Ctrl+W` closes the active tab; `Ctrl+Tab` / `Ctrl+Shift+Tab` cycles through tabs.
 
 ### Zoom
 CSS `zoom` property on `.markdown-body` — scales content only (toolbar and TOC are unaffected). State is in `App.tsx`, persisted to `localStorage`. Controls: toolbar buttons, `Ctrl++`/`Ctrl+-`/`Ctrl+0` keyboard shortcuts, and `Ctrl+scroll`. WebView2's native zoom is disabled via `SetIsZoomControlEnabled(false)` in `lib.rs` to prevent conflicts.
@@ -127,6 +148,16 @@ Each comment stores multiple anchoring fields for resilient text location:
 
 Layered fallback: section → paragraph → target → context → global search. If all fail, the comment is marked orphaned (visible in the comment panel with delete option).
 
+#### Selection Handling for Non-Plain-Text
+When a text selection includes rendered elements that don't match the markdown source (KaTeX math, figures, list items, table cells), `handleAddCommentClick` in `App.tsx` tries four strategies in order:
+
+1. **Exact / whitespace-normalized** — direct `indexOf` on the clean source
+2. **LaTeX extraction** — clones the DOM range, extracts the original LaTeX from KaTeX `<annotation encoding="application/x-tex">` elements, replaces rendered math with `$...$` / `$$...$$`, strips `<img>` tags, then searches again
+3. **First line only** — uses just the first non-empty line of the selection (handles multi-item list selections and multi-cell table selections)
+4. **DOM position fallback** — walks up the DOM from the selection's start container to the nearest block element (`<p>`, `<li>`, `<td>`, `<h1>`–`<h6>`, etc.), extracts the first ~30 chars of its plain text (skipping `.katex-mathml` duplicates), and searches for that in the source to get an approximate paragraph offset
+
+If all four strategies fail the button is dismissed without action.
+
 #### Content Pipeline Integration
 The comment block is extracted from raw file content **before** QMD preprocessing runs, so the block is never seen by `qmdPreprocess.ts` (which strips HTML comments). The flow is:
 
@@ -151,9 +182,33 @@ The `write_file` Rust command writes comment changes back to the file. A save-gu
 - `Ctrl+S` — save comments (only when there are unsaved changes)
 - `Escape` — close any open popup or input
 
+## Keyboard Shortcuts (full list)
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+O` | Open file dialog |
+| `Ctrl+R` | Reload active file |
+| `Ctrl+U` | Toggle raw source view |
+| `Ctrl+M` | Toggle comment visibility |
+| `Ctrl+S` | Save comments (when dirty) |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
+| `Ctrl+scroll` | Zoom |
+| `Ctrl+W` | Close active tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+| `Escape` | Close comment popup or input |
+
+## Build Script
+`scripts/build.ps1` automates the full release build:
+- Checks prerequisites (Node, npm, Rust, Tauri CLI)
+- Optionally patches `tauri.conf.json` with `.md`/`.markdown`/`.qmd` file associations (`-WithFileAssociations`)
+- Runs `npm run tauri build`
+- Restores original `tauri.conf.json` after build
+- Collects the NSIS installer and creates a portable ZIP in `./release/`
+
+**Important**: The script uses `[System.IO.File]::WriteAllText()` (not `Set-Content -Encoding UTF8`) to patch and restore `tauri.conf.json` — this avoids writing a UTF-8 BOM that would break Rust's serde JSON parser.
+
 ## Tauri Configuration
 - `src-tauri/tauri.conf.json` — window settings (1200×800, min 600×400, centered), CLI arg definitions, asset protocol config, bundle config
 - `src-tauri/capabilities/default.json` — security permissions (fs read + write + watch, dialog, cli)
 - `src-tauri/Cargo.toml` — includes `protocol-asset` feature on `tauri`, `webview2-com` for Windows-specific WebView2 control
 - The frontend dist is built to `dist/` and served from there in production
-
